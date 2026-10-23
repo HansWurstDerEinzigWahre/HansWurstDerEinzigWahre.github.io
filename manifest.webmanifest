@@ -1,0 +1,9 @@
+{
+  "name": "VRR Departure Dashboard",
+  "short_name": "VRR Departures",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0c1522",
+  "theme_color": "#14283f",
+  "description": "Saved VRR departure boards with line and direction filters."
+}

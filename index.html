@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14283f">
+<link rel="manifest" href="manifest.webmanifest">
+<title>VRR Departure Dashboard</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1522;--panel:#142338;--panel2:#1b2e46;--line:#2b4059;--text:#eef4fb;--muted:#a9b9cc;--accent:#8bc5ff;--green:#7de0b0;--amber:#ffd27d;--red:#ff9696}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:3;background:#101e30ee;backdrop-filter:blur(10px);padding:16px max(16px,env(safe-area-inset-left));border-bottom:1px solid var(--line)}
+h1{font-size:1.2rem;margin:0}header p{margin:4px 0 0;color:var(--muted);font-size:.88rem}
+main{max-width:900px;margin:auto;padding:14px 12px 40px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+button,.button{background:var(--panel2);color:var(--text);border:1px solid #3a526d;border-radius:11px;padding:10px 13px;font:inherit;cursor:pointer}
+button.primary{background:#214e76;border-color:#477eac}button.danger{color:#ffb3b3}button:disabled{opacity:.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;margin:12px 0;overflow:hidden}
+.cardhead{padding:14px 14px 10px;display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+.cardhead h2{font-size:1.08rem;margin:0}.sub{color:var(--muted);font-size:.87rem;margin-top:3px}
+.cardbody{padding:0 14px 14px}
+.status{font-size:.84rem;color:var(--muted);padding:0 14px 12px}.status.error{color:var(--red)}.status.ok{color:var(--green)}
+.departure{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.time{font-size:1.05rem;font-weight:750;font-variant-numeric:tabular-nums}.line{display:inline-block;background:#263e59;border-radius:6px;padding:2px 6px;font-weight:750;font-size:.82rem;margin-right:5px}.dest{font-weight:600}.meta{font-size:.82rem;color:var(--muted);margin-top:3px}.platform{text-align:right;font-weight:700;white-space:nowrap}.delay{font-size:.8rem;margin-top:3px}.good{color:var(--green)}.late{color:var(--amber)}.cancel{color:var(--red)}
+.empty{color:var(--muted);padding:16px 0}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field.full{grid-column:1/-1}label{font-size:.86rem;color:var(--muted)}input,select{width:100%;background:#0e1a29;color:var(--text);border:1px solid #3a526d;border-radius:9px;padding:10px;font:inherit;min-width:0}
+.hint{font-size:.82rem;color:var(--muted)}.results{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:6px}.result{display:block;width:100%;text-align:left;border:0;border-radius:0;border-bottom:1px solid var(--line);background:#102034}.result:last-child{border-bottom:0}.result small{display:block;color:var(--muted)}
+.pills{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.pill{display:flex;gap:7px;align-items:center;background:#20364f;border:1px solid #385673;border-radius:999px;padding:6px 9px;font-size:.85rem}.pill button{padding:0 3px;border:0;background:transparent;color:var(--amber)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.sectiontitle{font-size:.95rem;font-weight:700;margin:14px 0 5px}.hidden{display:none!important}
+.notice{background:#1c2c40;border-left:3px solid var(--accent);padding:10px 12px;border-radius:8px;color:#d4e4f5;font-size:.88rem;margin:12px 0}
+footer{color:var(--muted);font-size:.78rem;padding:14px 4px 25px}
+@media(max-width:520px){.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.departure{grid-template-columns:54px minmax(0,1fr) auto;gap:7px}.platform{font-size:.9rem}.cardhead{padding:12px}.cardbody{padding:0 12px 12px}}
+</style>
+</head>
+<body>
+<header><h1>VRR Departure Dashboard</h1><p>Saved stops, times and line/direction filters · live departures</p></header>
+<main>
+  <div class="toolbar">
+    <button class="primary" id="addEntryBtn">＋ Add departure board</button>
+    <button id="refreshAllBtn">↻ Refresh all</button>
+    <button id="exportBtn">Export settings</button>
+    <button id="importBtn">Import settings</button>
+    <input type="file" id="importFile" accept="application/json" class="hidden">
+  </div>
+  <div class="notice">Entries store a stop, a daily start time and the exact line/direction combinations you choose. Departures are filtered from that time onward (or from now if the time has already passed today). Data comes from the public VRR EFA service; availability and platform details depend on what the operator supplies.</div>
+  <div id="boards"></div>
+  <section id="editor" class="card hidden">
+    <div class="cardhead"><div><h2 id="editorTitle">Add departure board</h2><div class="sub">Configure a reusable departure filter</div></div><button id="closeEditorBtn" aria-label="Close">✕</button></div>
+    <div class="cardbody">
+      <div class="formgrid">
+        <div class="field full"><label for="entryName">Board name</label><input id="entryName" placeholder="e.g. Morning commute"></div>
+        <div class="field full"><label for="stopSearch">Find stop or station</label><input id="stopSearch" placeholder="e.g. Düsseldorf Hbf"><div id="stopResults" class="results hidden"></div><div class="hint" id="selectedStopHint">Choose a result to save its unique stop ID.</div></div>
+        <div class="field"><label for="startTime">Show departures from</label><input id="startTime" type="time" value="07:30" required></div>
+        <div class="field"><label for="count">Maximum matching departures</label><select id="count"><option>5</option><option selected>10</option><option>15</option><option>20</option><option>30</option><option>40</option></select></div>
+      </div>
+      <div class="sectiontitle">Choose lines and directions</div>
+      <div class="hint">After selecting a stop, load its departures and tap the services you want. You can select multiple directions of the same line.</div>
+      <div class="actions"><button id="loadServicesBtn">Load services at selected stop</button></div>
+      <div id="serviceList" class="pills"></div>
+      <div class="actions">
+        <button class="primary" id="saveEntryBtn">Save board</button>
+        <button id="cancelEditorBtn">Cancel</button>
+      </div>
+      <div id="editorStatus" class="status"></div>
+    </div>
+  </section>
+  <footer>Not affiliated with VRR. Refresh interval: 60 seconds while this page is open. This prototype stores settings in this browser on this device. It does not yet provide background push notifications when closed.</footer>
+</main>
+<script>
+const API='https://efa.vrr.de/vrr';
+const STORE='vrrDepartureDashboard.v1';
+const $=id=>document.getElementById(id);
+let entries=[], editingId=null, chosenStop=null, services=[], selectedServices=new Set(), refreshTimer=null, searchTimer=null;
+const nowTime=()=>new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',hour12:false});
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function load(){try{entries=JSON.parse(localStorage.getItem(STORE)||'[]')}catch{entries=[]} renderBoards(); if(entries.length) refreshAll();}
+function persist(){localStorage.setItem(STORE,JSON.stringify(entries));}
+function setStatus(id,msg,kind=''){const el=$(id);if(el){el.textContent=msg;el.className='status '+kind;}}
+function showEditor(entry=null){
+ editingId=entry?.id||null; chosenStop=entry?.stop||null; selectedServices=new Set((entry?.services||[]).map(s=>s.key)); services=[];
+ $('editorTitle').textContent=entry?'Edit departure board':'Add departure board';
+ $('entryName').value=entry?.name||''; $('stopSearch').value=entry?.stop?.name||''; $('startTime').value=entry?.time||'07:30'; $('count').value=String(entry?.count||10);
+ $('selectedStopHint').textContent=chosenStop?`Selected: ${chosenStop.name} · ${chosenStop.id}`:'Choose a result to save its unique stop ID.';
+ $('stopResults').classList.add('hidden'); $('serviceList').innerHTML=''; $('editorStatus').textContent='';
+ $('editor').classList.remove('hidden'); $('editor').scrollIntoView({behavior:'smooth',block:'start'});
+ if(entry?.services?.length){services=entry.services;renderServices();}
+}
+function closeEditor(){$('editor').classList.add('hidden');editingId=null;}
+async function api(path){const r=await fetch(API+path,{cache:'no-store'});if(!r.ok)throw new Error(`API HTTP ${r.status}`);return await r.json();}
+async function searchStops(q){
+ if(!q.trim())return;
+ try{
+  const d=await api('/XML_STOPFINDER_REQUEST?'+new URLSearchParams({outputFormat:'rapidJSON',type_sf:'stop',name_sf:q,locationServerActive:'1',language:'de'}));
+  const list=(d.locations||[]).filter(x=>x.type==='stop'||x.type==='station').slice(0,8);
+  const box=$('stopResults');box.innerHTML='';
+  if(!list.length){box.innerHTML='<div class="result">No stops found.</div>';}
+  for(const s of list){const b=document.createElement('button');b.className='result';b.innerHTML=`${esc(s.name)}<small>${esc(s.disassembledName||s.parent?.name||'')} · ${esc(s.id||'')}</small>`;b.onclick=()=>{chosenStop={id:s.id,name:s.name};$('stopSearch').value=s.name;$('selectedStopHint').textContent=`Selected: ${s.name} · ${s.id}`;box.classList.add('hidden');services=[];selectedServices.clear();$('serviceList').innerHTML='';};box.appendChild(b);}
+  box.classList.remove('hidden');
+ }catch(e){setStatus('editorStatus','Could not search stops. The API may be unreachable or your browser may block cross-origin requests. '+e.message,'error');}
+}
+function buildTimeParams(time){
+ const now=new Date(), parts=(time||'00:00').split(':').map(Number);
+ const chosen=new Date(now);chosen.setHours(parts[0],parts[1],0,0);
+ const effective=chosen>now?chosen:now;
+ return {itdDateDay:String(effective.getDate()),itdDateMonth:String(effective.getMonth()+1),itdDateYear:String(effective.getFullYear()),itdTimeHour:String(effective.getHours()),itdTimeMinute:String(effective.getMinutes())};
+}
+async function fetchDepartures(entry,limit=40){
+ const p=new URLSearchParams({outputFormat:'rapidJSON',stateless:'1',type_dm:'stop',name_dm:entry.stop.id,mode:'direct',useRealtime:'1',limit:String(limit),language:'de',...buildTimeParams(entry.time)});
+ return await api('/XML_DM_REQUEST?'+p.toString());
+}
+function eventKey(ev){const t=ev.transportation||{};return `${t.disassembledName||t.number||t.name||'?'}|${t.destination?.name||t.destination?.id||'?'}`;}
+function lineName(ev){const t=ev.transportation||{};return String(t.disassembledName||t.number||t.name||'Service');}
+function directionName(ev){const t=ev.transportation||{};return String(t.destination?.name||t.destination?.id||'Unknown direction');}
+async function loadServices(){
+ if(!chosenStop){setStatus('editorStatus','Choose a stop first.','error');return;}
+ setStatus('editorStatus','Loading services…');
+ try{const temp={stop:chosenStop,time:$('startTime').value||'00:00'};const d=await fetchDepartures(temp,60);const seen=new Map();
+  for(const ev of (d.stopEvents||[])){const key=eventKey(ev);if(!seen.has(key))seen.set(key,{key,line:lineName(ev),direction:directionName(ev)});}
+  services=[...seen.values()];
+  if(!services.length){setStatus('editorStatus','No departures returned for this stop/time. Try another time or check the stop.','error');return;}
+  renderServices();setStatus('editorStatus',`Loaded ${services.length} line/direction combinations. Tap to select.`, 'ok');
+ }catch(e){setStatus('editorStatus','Could not load departures. '+e.message+' If the browser reports a CORS error, this API cannot be called directly from the chosen browser and a small proxy/server is needed.','error');}
+}
+function renderServices(){
+ const box=$('serviceList');box.innerHTML='';
+ for(const s of services){const b=document.createElement('button');b.className='pill';b.style.outline=selectedServices.has(s.key)?'2px solid var(--accent)':'none';b.innerHTML=`<span>${selectedServices.has(s.key)?'✓ ':'＋ '}${esc(s.line)} → ${esc(s.direction)}</span>`;b.onclick=()=>{selectedServices.has(s.key)?selectedServices.delete(s.key):selectedServices.add(s.key);renderServices();};box.appendChild(b);}
+ if(!services.length)box.innerHTML='<span class="hint">No services loaded yet.</span>';
+}
+function saveEntry(){
+ if(!chosenStop){setStatus('editorStatus','Select a stop from the search results.','error');return;}
+ if(!selectedServices.size){setStatus('editorStatus','Select at least one line/direction combination.','error');return;}
+ const entry={id:editingId||crypto.randomUUID(),name:$('entryName').value.trim()||chosenStop.name,stop:chosenStop,time:$('startTime').value||'00:00',count:Number($('count').value)||10,services:services.filter(s=>selectedServices.has(s.key))};
+ if(editingId){entries=entries.map(e=>e.id===editingId?entry:e);}else entries.push(entry);
+ persist();renderBoards();closeEditor();refreshEntry(entry.id);
+}
+function renderBoards(){
+ const root=$('boards');root.innerHTML='';
+ if(!entries.length){root.innerHTML='<div class="card"><div class="cardbody"><div class="empty">No boards yet. Add a board, choose a stop, set a start time, then select the line/direction combinations to monitor.</div></div></div>';return;}
+ for(const e of entries){
+  const card=document.createElement('section');card.className='card';card.id='board-'+e.id;
+  card.innerHTML=`<div class="cardhead"><div><h2>${esc(e.name)}</h2><div class="sub">${esc(e.stop.name)} · from ${esc(e.time)} · ${e.services.length} selected service(s)</div></div><div class="actions" style="margin:0"><button data-action="refresh">↻</button><button data-action="edit">Edit</button><button class="danger" data-action="delete">✕</button></div></div><div class="cardbody"><div class="empty">Waiting for live data…</div></div><div class="status" id="status-${e.id}">Not refreshed yet.</div>`;
+  card.querySelector('[data-action=refresh]').onclick=()=>refreshEntry(e.id);
+  card.querySelector('[data-action=edit]').onclick=()=>showEditor(e);
+  card.querySelector('[data-action=delete]').onclick=()=>{if(confirm(`Delete "${e.name}"?`)){entries=entries.filter(x=>x.id!==e.id);persist();renderBoards();}};
+  root.appendChild(card);
+ }
+}
+function parseTime(s){if(!s)return null;const d=new Date(s);return Number.isNaN(+d)?null:d;}
+function fmtTime(s){const d=parseTime(s);return d?d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',hour12:false}):'--:--';}
+function minutesDiff(planned,estimated){const a=parseTime(planned),b=parseTime(estimated);return a&&b?Math.round((b-a)/60000):0;}
+function isCancelled(ev){const all=[...(ev.infos||[]),...(ev.cancelled?['cancelled']:[])];return !!ev.cancelled||all.some(x=>/cancel|ausfall|entfällt/i.test(JSON.stringify(x)));}
+function renderDeparture(ev){
+ const t=ev.transportation||{},planned=ev.departureTimePlanned,estimated=ev.departureTimeEstimated;
+ const delay=minutesDiff(planned,estimated),cancel=isCancelled(ev),platform=ev.location?.properties?.platformName||ev.properties?.platformName||ev.platformName||'—';
+ const infos=(ev.infos||[]).map(x=>typeof x==='string'?x:(x.text||x.name||x.subtitle||'')).filter(Boolean).join(' · ');
+ return `<div class="departure"><div><div class="time">${fmtTime(estimated||planned)}</div><div class="meta">${fmtTime(planned)} sched.</div></div><div><div><span class="line">${esc(t.disassembledName||t.number||t.name||'?')}</span><span class="dest">${esc(t.destination?.name||'Unknown destination')}</span></div><div class="meta">${esc(infos||t.product?.name||'')}</div></div><div class="platform"><div>${platform==='—'?'Track —':'Track '+esc(platform)}</div><div class="delay ${cancel?'cancel':delay>0?'late':'good'}">${cancel?'CANCELLED':delay>0?'+'+delay+' min':delay<0?delay+' min':'On time'}</div></div></div>`;
+}
+async function refreshEntry(id){
+ const e=entries.find(x=>x.id===id);if(!e)return;
+ const card=$('board-'+id);if(!card)return;const body=card.querySelector('.cardbody');setStatus('status-'+id,'Refreshing…');
+ try{
+  const d=await fetchDepartures(e,60);
+  const all=d.stopEvents||[];
+  const allowed=new Set(e.services.map(s=>s.key));
+  const matching=all.filter(ev=>allowed.has(eventKey(ev)));
+  body.innerHTML=matching.length?matching.slice(0,e.count).map(renderDeparture).join(''):'<div class="empty">No matching departures returned after the selected time. Check the time, stop, or selected directions.</div>';
+  const messages=(d.systemMessages||[]).map(x=>x.text||x.name||'').filter(Boolean).join(' · ');
+  setStatus('status-'+id,`${new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} · ${matching.length} matching departure(s)${messages?' · '+messages:''}`,'ok');
+ }catch(err){body.innerHTML='<div class="empty">Live data unavailable right now.</div>';setStatus('status-'+id,'Error: '+err.message+'. If this mentions CORS, use a browser/server setup that permits the VRR API request.','error');}
+}
+function refreshAll(){entries.forEach(e=>refreshEntry(e.id));}
+$('addEntryBtn').onclick=()=>showEditor();
+$('closeEditorBtn').onclick=closeEditor;$('cancelEditorBtn').onclick=closeEditor;
+$('saveEntryBtn').onclick=saveEntry;$('loadServicesBtn').onclick=loadServices;
+$('refreshAllBtn').onclick=refreshAll;
+$('stopSearch').addEventListener('input',()=>{clearTimeout(searchTimer);chosenStop=null;$('selectedStopHint').textContent='Choose a result to save its unique stop ID.';const q=$('stopSearch').value;searchTimer=setTimeout(()=>searchStops(q),350);});
+$('exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(entries,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vrr-departure-boards.json';a.click();URL.revokeObjectURL(a.href);};
+$('importBtn').onclick=()=>$('importFile').click();
+$('importFile').onchange=async ev=>{const f=ev.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(!Array.isArray(data))throw Error('Expected a JSON array');entries=data;persist();renderBoards();refreshAll();}catch(e){alert('Import failed: '+e.message)}ev.target.value='';};
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+load();refreshTimer=setInterval(refreshAll,60000);
+</script>
+</body></html>
