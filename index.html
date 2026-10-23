@@ -66,7 +66,7 @@ footer{color:var(--muted);font-size:.78rem;padding:14px 4px 25px}
   <footer>Not affiliated with VRR. Refresh interval: 60 seconds while this page is open. This prototype stores settings in this browser on this device. It does not yet provide background push notifications when closed.</footer>
 </main>
 <script>
-const API='https://efa.vrr.de/vrr';
+const API='https://openservice.vrr.de/vrr';
 const STORE='vrrDepartureDashboard.v1';
 const $=id=>document.getElementById(id);
 let entries=[], editingId=null, chosenStop=null, services=[], selectedServices=new Set(), refreshTimer=null, searchTimer=null;
